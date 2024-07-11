@@ -3,3 +3,14 @@ controllers:
         path: ../src/Controller/
         namespace: App\Controller
     type: attribute
+customer_list:
+    path: /customers
+    controller: App\Controller\CustomerController::listCustomers
+    methods: [GET]
+
+customer_details:
+    path: /customers/{customerId}
+    controller: App\Controller\CustomerController::getCustomerDetails
+    methods: [GET]
+    requirements:
+        customerId: '\d+'  # Ensures customerId is a digit
