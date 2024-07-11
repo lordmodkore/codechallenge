@@ -35,6 +35,11 @@ class CustomerImporterService
 				// Update existing customer
 				$existingCustomer->setFirstName($userData['name']['first']);
 				$existingCustomer->setLastName($userData['name']['last']);
+				$existingCustomer->setCountry($userData['nat']);
+				$existingCustomer->setCity($userData['location']['city']);
+				$existingCustomer->setPhone($userData['phone']);
+				$existingCustomer->setUsername($userData['login']['username']);
+				$existingCustomer->setPassword($userData['login']['password']);
 				// Update other fields as needed
 
 				$this->entityManager->persist($existingCustomer);
