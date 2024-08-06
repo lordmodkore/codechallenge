@@ -7,59 +7,61 @@ namespace App\Service;
 use Symfony\Component\HttpClient\HttpClient;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\Customer;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class CustomerImporterService
 {
+
+	private $httpClient;
 	private $entityManager;
 
-	public function __construct(EntityManagerInterface $entityManager)
+	public function __construct(HttpClientInterface $httpClient, EntityManagerInterface $entityManager)
 	{
+		$this->httpClient = $httpClient;
 		$this->entityManager = $entityManager;
 	}
 
-	public function importCustomers(int $count)
+	public function importCustomers()
 	{
-		$httpClient = HttpClient::create();
-		$response = $httpClient->request('GET', "https://randomuser.me/api/?results={$count}&nat=au");
+		$response = $this->httpClient->request('GET', 'https://randomuser.me/api/', [
+			'query' => ['results' => 100, 'nat' => 'AU']
+		]);
 
 		$data = $response->toArray();
+		$customers = $data['results'];
 
+		$customerEntities = array_map(function ($customer) {
+			return (new Customer())
+				->setFirstName($customer['name']['first'])
+				->setLastName($customer['name']['last'])
+				->setEmail($customer['email'])
+				->setCountry($customer['nat'])
+				->setUsername($customer['login']['username'])
+				->setGender($customer['gender'])
+				->setCity($customer['location']['city'])
+				->setPhone($customer['phone'])
+				->setPassword(md5($customer['login']['password']));
+		}, $customers);
 
+		array_walk($customerEntities, function ($customerEntity) {
+			$existingCustomer = $this->entityManager->getRepository(Customer::class)
+			                                        ->findOneBy(['email' => $customerEntity->getEmail()]);
 
-
-		foreach ($data['results'] as $userData) {
-			// Check if customer already exists by email
-			$existingCustomer = $this->entityManager->getRepository(Customer::class)->findOneBy(['email' => $userData['email']]);
-
-			if ($existingCustomer instanceof Customer) {
+			if ($existingCustomer) {
 				// Update existing customer
-				$existingCustomer->setFirstName($userData['name']['first']);
-				$existingCustomer->setLastName($userData['name']['last']);
-				$existingCustomer->setCountry($userData['nat']);
-				$existingCustomer->setCity($userData['location']['city']);
-				$existingCustomer->setPhone($userData['phone']);
-				$existingCustomer->setUsername($userData['login']['username']);
-				$existingCustomer->setPassword($userData['login']['password']);
-				// Update other fields as needed
-
-				$this->entityManager->persist($existingCustomer);
+				$existingCustomer->setFirstName($customerEntity->getFirstName())
+				                 ->setLastName($customerEntity->getLastName())
+				                 ->setCountry($customerEntity->getCountry())
+				                 ->setUsername($customerEntity->getUsername())
+				                 ->setGender($customerEntity->getGender())
+				                 ->setCity($customerEntity->getCity())
+				                 ->setPhone($customerEntity->getPhone())
+				                 ->setPassword($customerEntity->getPassword());
 			} else {
-				// Create new customer
-				$customer = new Customer();
-				$customer->setFirstName($userData['name']['first']);
-				$customer->setLastName($userData['name']['last']);
-				$customer->setEmail($userData['email']);
-				$customer->setGender($userData["gender"]);
-				$customer->setCountry($userData['nat']);
-				$customer->setCity($userData['location']['city']);
-				$customer->setPhone($userData['phone']);
-				$customer->setUsername($userData["login"]['username']);
-				$customer->setPassword($userData["login"]['password']);
-				// Set other fields as needed
-
-				$this->entityManager->persist($customer);
+				// Add new customer
+				$this->entityManager->persist($customerEntity);
 			}
-		}
+		});
 
 		$this->entityManager->flush();
 	}
